@@ -3,7 +3,7 @@ title: "静态网站生成工具选择"
 date: 2020-12-21T15:18:17+08:00
 categories: ['hugo']
 tags: ['jekyll', 'hexo', 'hugo']
-draft: false
+draft: true
 ---
 
 
