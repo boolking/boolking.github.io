@@ -103,7 +103,8 @@ static Entry **bins = static_cast<Entry **>(std::calloc(init_size,
                                             sizeof(Entry *)));
 ```
 从代码可以看出来，用的是[Seperated chaining](https://en.wikipedia.org/wiki/Hash_table#Separate_chaining)方式存放的，如下图：
-![Hash table](images/Hash_table.svg)
+
+![Hash table](/img/Hash_table.png)
 
 怎么从内存中还原词表呢？
 * [ReadProcessMemory()](https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory)
