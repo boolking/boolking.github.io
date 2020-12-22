@@ -18,10 +18,12 @@ summary: 一次误操作导致整个数据库被drop，怎么恢复？
 
 # 从磁盘恢复数据
 
-说实话，之前没有相关经验，只有先google一下看看有没有现成可以参考的解决方案。在[stackexchange](https://dba.stackexchange.com/questions/23251/is-there-a-way-to-recover-a-dropped-mysql-database/72760)上看到有人提到[TwinDB data recovery toolkit](https://github.com/twindb/undrop-for-innodb)，提到**先需要停掉mysql，并停止一切写入**，赶紧systemctl stop mysql，umount掉disk。
+说实话，之前没有相关经验，只有先google一下看看有没有现成可以参考的解决方案。在[stackexchange](https://dba.stackexchange.com/questions/23251/is-there-a-way-to-recover-a-dropped-mysql-database/72760)上看到有人提到[TwinDB data recovery toolkit](https://github.com/twindb/undrop-for-innodb)可以恢复，**先需要停掉mysql，并停止一切写入**，赶紧systemctl stop mysql，umount掉mysql database所在的disk。
 
-MySQL 5.5之前是所有数据都放在ibdata1文件里面的，因此被删除的数据还在ibdata里面，而5.6之后是放在单独的目录里面，drop database/table是直接删除文件的。我们用的是5.8，不能直接扫描ibdata1，需要扫描整个磁盘，同时也意味着其他OS的写入也很可能导致数据被覆盖掉。不过既然是删除了文件，可以先试试能不能从xfs里面恢复删除的文件，找到一个[工具](https://github.com/ianka/xfs_undelete)，扫描了一遍磁盘，没能够找到对应的ibd文件。
+MySQL 5.5之前是所有数据都放在ibdata1文件里面的，因此被删除的数据还在ibdata里面，而5.6之后是放在单独的目录里面，drop database/table是直接删除文件的。我们用的是5.8，不能直接扫描ibdata1，需要扫描整个磁盘，同时也意味着其他进程的写入也很可能导致数据被覆盖掉。不过既然是删除了文件，可以先试试能不能从xfs里面恢复删除的文件，找到一个[工具](https://github.com/ianka/xfs_undelete)，扫描了一遍磁盘，没能够找到对应的ibd文件。
 
+
+## TwinDB data recovery toolkit使用
 先下载到本地编译
 ```bash
 git clone https://github.com/twindb/undrop-for-innodb
@@ -83,7 +85,7 @@ curl "http://solr-server/solr/corpora/select?q=*:*&wt=csv&indent=true&rows=26159
 
 # 从内存中恢复
 但是还有词表没恢复，这张表是没有solr缓存的，怎么办？
-还好，我们有一个在线分词查询程序，会将词表cache到内存中，这是一个python写的http server，分词是使用c++实现的，运行在windows上。
+还好，我们有一个在线分词查询程序，会将词表cache到内存中，这是一个python写的http server，分词是使用c++实现的DLL，运行在windows上。
 
 词表保存在一个hash table里面，结构如下：
 ```c++
@@ -106,16 +108,16 @@ static Entry **bins = static_cast<Entry **>(std::calloc(init_size,
 
 ![Hash table](/img/Hash_table.png)
 
-怎么从内存中还原词表呢？
-* [ReadProcessMemory()](https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory)
-* [MiniDump文件](https://en.wikipedia.org/wiki/Core_dump#MINIDUMP)
+怎么从内存中还原词表呢？有两种方法：
+* [ReadProcessMemory()](https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory)：直接读取进程的内存空间
+* [MiniDump文件](https://en.wikipedia.org/wiki/Core_dump#MINIDUMP)：保存为Minidump文件，然后读取这个文件
 
-我选择第二个，使用[Process Explorer](https://docs.microsoft.com/en-us/sysinternals/downloads/process-explorer)保存一个full dump文件。
+我选择第二个，使用[Process Explorer](https://docs.microsoft.com/en-us/sysinternals/downloads/process-explorer)保存一个dump文件。这里需要注意，**必须保存full dump，否则Heap不会保存，后续无法获取heap中的数据**。
 
 ## minidump文件格式
 不像其他文件格式，MS对minidump文件的格式描述还是很清楚的，在[这里](https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/)可以找到。有人已经给我们写好了[python解析minidump的库](https://github.com/skelsec/minidump)，我们只需要找到全局变量数组bins，然后遍历这个数组找出所有的Word即可。
 
-## 定位数组
+## 定位变量地址
 在windows中，一个进程是有自己独立进程空间的，这个进程依赖的DLL都会作为module被加载到这个进程的地址空间中来，我们在minidump中可以找到这个DLL所在的base address，然后在这个DLL中定位到这个变量所在偏移量，两者相加即可得到这个变量在整个进程空间中的地址。
 
 minidump中包含了所有module的相关信息，而变量的偏移地址，就需要借助一些其他方法来获取了。如果有PDB文件，则比较容易，但是我们这个DLL的PDB文件也没有保存下来，我们只能想其他办法。
