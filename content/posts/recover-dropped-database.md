@@ -20,7 +20,7 @@ summary: 一次误操作导致整个数据库被drop，怎么恢复？
 
 说实话，之前没有相关经验，只有先google一下看看有没有现成可以参考的解决方案。在[stackexchange](https://dba.stackexchange.com/questions/23251/is-there-a-way-to-recover-a-dropped-mysql-database/72760)上看到有人提到[TwinDB data recovery toolkit](https://github.com/twindb/undrop-for-innodb)可以恢复，**先需要停掉mysql，并停止一切写入**，赶紧systemctl stop mysql，umount掉mysql database所在的disk。
 
-MySQL 5.5之前是所有数据都放在ibdata1文件里面的，因此被删除的数据还在ibdata里面，而5.6之后是放在单独的目录里面，drop database/table是直接删除文件的。我们用的是5.8，不能直接扫描ibdata1，需要扫描整个磁盘，同时也意味着其他进程的写入也很可能导致数据被覆盖掉。不过既然是删除了文件，可以先试试能不能从xfs里面恢复删除的文件，找到一个[工具](https://github.com/ianka/xfs_undelete)，扫描了一遍磁盘，没能够找到对应的ibd文件。
+MySQL 5.5之前是所有数据都放在ibdata1文件里面的，因此被删除的数据还在ibdata里面，而5.6之后是放在单独的目录里面，drop database/table是直接删除文件的。我们用的是8.0，不能直接扫描ibdata1，需要扫描整个磁盘，同时也意味着其他进程的写入也很可能导致数据被覆盖掉。不过既然是删除了文件，可以先试试能不能从xfs里面恢复删除的文件，找到一个[工具](https://github.com/ianka/xfs_undelete)，扫描了一遍磁盘，没能够找到对应的ibd文件。
 
 
 ## TwinDB data recovery toolkit使用
