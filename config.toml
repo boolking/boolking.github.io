@@ -133,7 +133,7 @@ enableEmoji = true
           # 主页显示的网站标题 (支持 HTML 格式)
           title = ""
           # 主页显示的网站副标题
-          subtitle = "BoolKinG写字的地方"
+          subtitle = "BoolKinG的技术感想"
           # 是否为副标题显示打字机动画
           typeit = true
           # 是否显示社交账号
