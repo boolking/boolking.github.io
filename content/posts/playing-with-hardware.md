@@ -24,11 +24,11 @@ summary: 最近忙于学习硬件开发，这篇post来谈谈一个软件开发�
 
 经过了半年的学习和开发，目前基本功能已经可以正常使用，还有一些收尾的工作正在进行，终于有时间来总(tu)结(cao)一下了。
 
-# 开发语言的选择 Verilog VS VHDL VS SystemVerilog
+# 开发语言的选择
 
 之前做过一些FPGA相关的工作，硬件的同事主要使用的是VHDL，现在Verilog已经是主流了，VHDL的项目也越来越少，再加上Verilog号称与C语言比较类似，一开始就选择了Verilog作为主要开发语言。但是在开发的过程中，发现Verilog基本等同于软件开发的汇编语言了，根本没有数据结构的概念，只有reg和wire，而且还需要手工区分wire和reg类型，作为用惯了高级语言的我来说，感觉实在太别扭了。于是从Verilog转到了SystemVerilog，才感觉从史前到了古代。
 
-SystemVerilog虽然比Verilog要稍微好用一点，但是也仅仅也就只是好一点而已了。SystemVerilog大部分改进都只能在simulation的时候使用，synthesis的时候是不支持的。
+为什么说SystemVerilog是古代呢？SystemVerilog虽然比Verilog要稍微好用一点，但是也仅仅也就只是好一点而已了。SystemVerilog大部分改进都只能在simulation的时候使用，synthesis的时候是不支持的。
 
 另外，也简单看了下chisel等号称下一代HDL的语言，发现基本也是没太大改进。
 
@@ -40,9 +40,9 @@ SystemVerilog虽然比Verilog要稍微好用一点，但是也仅仅也就只是
 
 FF用于存储状态，组合逻辑电路用来将输入转换到输出，时钟用于驱动状态的变换，写RTL也就是搭建组合逻辑电路和寄存器构成的数字电路。
 
-在HDL（Hardware Description Language）出现之前，大家都是手工搭建电路的，有种侏罗纪的感觉。出现了HDL后，终于可以不用画图了，综合工具（相当于软件里面的编译器）可以帮你把加法直接综合成加法器了，不用手工搭加法器电路了。不过，综合工具也就只能支持加法，位运算这些简单的操作了，乘法和除法还是不支持或者支持有限。
+在HDL（Hardware Description Language）出现之前，大家都是手工搭建电路的，有种侏罗纪的感觉。出现了HDL后，终于可以不用画图了，综合工具（相当于软件里面的编译器）可以帮你把加法运算直接综合成加法器了，不用手工搭加法器电路了。不过，综合工具也就只能支持加法，位运算这些简单的操作了，乘法和除法还是不支持或者支持有限。
 
-那么，在软件中的乘法和除法是怎么做的呢？乘法可以展开为加法，每个时钟周期做一个加法，多做几个时钟周期就可以了。
+那么，在软件中的乘法和除法是怎么做的呢？乘法可以展开为加法或者移位，每个时钟周期做一次加法或者移位，将中间结果保存在寄存器中，多做几个时钟周期就可以了。
 
 # 状态机
 
@@ -51,64 +51,64 @@ RTL的最基本单元就是FSM，不管你是使用计算器的结果作为状�
 
 # CDC（Clock Domain Crossing）
 
-如果所有的DFF都工作在用一个时钟域，那就是最简单的情况。但是，考虑到功耗，组合逻辑电路的复杂度不同导致的延迟差异以及不同的传输协议等问题，基本上一个设计中都包含多个不同的时钟，用于驱动不同的部分。比如memory的时钟与HDMI的时钟必然不可能使用同一个时钟。
+如果所有的DFF都工作在同一个时钟域，那就是最简单的情况。但是，考虑到功耗，组合逻辑电路的复杂度不同导致的延迟差异以及不同的传输协议等问题，基本上一个设计中都包含多个不同的时钟，用于驱动不同的部分。比如memory的时钟与HDMI的时钟必然不可能使用同一个时钟。
 
-而多个不同时钟之间的数据传输，有可能出现亚稳态，怎么避免亚稳态就构成了典型的CDC问题。CDC常见的处理方式有三种：打两（N）拍，多bit的握手机制和使用DCFIFO进行多bit数据传输。
+而多个不同时钟之间的数据传输，有可能出现亚稳态，怎么避免亚稳态就构成了典型的CDC问题。CDC常见的处理方式有三种：打两（N）拍，握手机制和使用FIFO。
 
 CDC导致的第二个问题，就是STA（静态时序分析）是无法对CDC进行正确处理的，因此需要对其进行特殊处理，要么将其路径打断（set_false_path），要么设置为多周期（set_multicycle_path)。
 
-# STA
+# STA（Static Timing Analysis）
 
 * 为什么一个数字逻辑电路无法跑到更高的频率？
-    正如我们上面所述，数字逻辑电路中最重要的组成部分是组合逻辑电路和DFF，组合逻辑电路从输入到输出是需要时间的，越复杂的电路耗时越长；DFF的记录状态变化和输出之前的状态也是需要时间的，这两部分耗时加起来就约束了数字逻辑电路的时钟周期，从而也约束了其运行的最高频率。
+    正如我们上面所述，数字逻辑电路中最重要的组成部分是组合逻辑电路和DFF，组合逻辑电路从输入到稳定输出是需要时间的，越复杂的电路耗时越长，而且在输出稳定前可能会出现毛刺；DFF的记录状态变化和输出之前的状态也是需要时间的，这两部分耗时加起来就约束了数字逻辑电路的最小时钟周期，从而也约束了其运行的最高频率。
 
 * 我们怎么才能得到一个数字逻辑电路的最高频率呢？
-    STA就是用来帮助我们分析这个问题的工具，STA工具通过用户提供的约束条件，通过内置的器件延时，计算出数据传输路径上DFF的setup time和recovery time，当发生时序违例的时候，我们就能够有针对性的调整一些关键路径上的实现，进一步优化时序，提高电路运行的频率。
+    STA就是用来帮助我们分析这个问题的工具，STA工具通过用户提供的约束条件和器件固有的延时，计算出数据传输路径上DFF的setup time和recovery time，当发生时序违例的时候，我们就能够有针对性的调整一些关键路径上的实现，进一步优化时序，提高电路运行的频率。
 
 # FPGA
 
-FPGA怎么做到可编程的呢？学过数字逻辑的同学都知道，所有的组合逻辑可以用LUT（lookup table）来完成。一般来说，FPGA中会将4输入的LUT加上一个DFF构成一个基本的LE（逻辑单元），每个LE都可以进行对应的LUT的配置和是否使用DFF，再用连线将LE连接起来，因此就能够将我们前面所述的RTL转换到一个开关表（bitstream），表项对应LUT，DFF是否使能，LE之间是否连线。
+FPGA怎么做到可编程的呢？学过数字逻辑的同学都知道，所有的组合逻辑可以用LUT（lookup table）来完成。一般来说，FPGA中会将4输入LUT加上一个DFF构成一个基本的LE（逻辑单元），每个LE都可以进行对应的LUT的配置和是否使用DFF，再用连线将LE连接起来，因此就能够将我们前面所述的RTL转换到一个开关表（bitstream），表项对应每个LE内部的LUT/DFF是否使能，LE之间是否连线。
 
 在FPGA开发中，Synthesis将HDL转换为通用的硬件表示，对应到ASIC开发的前端流程，Placement&Routing则将通用的硬件表示映射为特定FPGA硬件中的LE及LE之间的连线，对应到ASIC开发的后端流程。
 
-通用的FPGA Synthesis工具有Synopsys的[Synplify](https://www.synopsys.com/implementation-and-signoff/fpga-based-design/synplify-pro.html)和Mentor的[Precision](https://eda.sw.siemens.com/en-US/ic/precision/rtl/)。Intel/Altera和Xilinx也有自己的Synthesis工具。Placement&Routing由于与具体的芯片关系紧密，各家FPGA厂商都是使用的自己的工具。
+通用的FPGA Synthesis工具有Synopsys的[Synplify](https://www.synopsys.com/implementation-and-signoff/fpga-based-design/synplify-pro.html)和Mentor的[Precision](https://eda.sw.siemens.com/en-US/ic/precision/rtl/)。Intel/Altera和Xilinx也有自己专用的Synthesis工具。Placement&Routing由于与具体的芯片关系紧密，各家FPGA厂商都是使用的自己的工具。
 
-FPGA中还集成了很多其他硬件，用于方便开发人员实现自己的功能，比如高速收发器用于对接外部的串行数据I/O，硬核CPU用于控制，硬核memory controller可以极大的加快内存的访问速度。
+FPGA中还集成了很多其他硬件，用于方便开发人员实现自己的功能，比如高速收发器用于对接外部的高速串行数据I/O，用于实现10G/40G以太网，HDMI等接口；硬核CPU用于控制；硬核memory controller可以极大的加快内存的访问速度。
 
-数字逻辑电路的Synthesis和P&R的速度实在太慢了，我们这个小项目完整的流程需要20-30分钟。
+数字逻辑电路的Synthesis和P&R的速度实在太慢了，而且对多线程的支持也不完善，我们这个小项目一次完整的综合布局布线流程需要20-30分钟。
 
 # 调试与仿真
 
-RTL开发很难进行调试，常见的拍错方式是进行simulation（仿真）。Simulation就是给予待测试单元输入激励，然后通过simulator模拟硬件工作，对激励给出输出信号，simulator可以记录内部信号的变化，用waveform的形式进行展示。相比于软件的debugger，simulator能够记录所有的信号变化，对于出现的错误，分析waveform，并定位出root cause是数字逻辑开发人员的基本功。
+RTL开发很难进行调试，常见的拍错方式是进行simulation（仿真）。Simulation就是给予待测试单元（UUT）输入激励，然后通过simulator模拟硬件工作，对激励给出输出信号，simulator可以记录module内部信号的变化，用waveform的形式进行展示。相比于软件的debugger，simulator能够记录所有的信号变化，类似于tracer。对于信号中出现的错误，分析waveform，并定位出root cause是数字逻辑开发人员的基本功。
 
 目前主流的Simulator有Synopsys的VCS+Verdi，Cadence的NCVerilog/Xcelium和Mentor的ModelSim/QuestaSim。另外，Xilinx的Vivado中也有集成自家的Simulator。还有Aldec的ActiveHDL和Riviera Pro这种比较小众的Simulator。
 
-Simulator是EDA软件中为数不多有着开源替代方案的领域。[Verilator](https://www.veripool.org/verilator/)和[Icarus Verilog](http://iverilog.icarus.com/)也是不错的选择，唯一的遗憾是Verilator对SystemVerilog的支持还不够好，从issue来看，官方也正在着手改进，希望能够尽快支持最新的SystemVerilog标准。
+Simulator是EDA软件中为数不多有着开源替代方案的领域。[Verilator](https://www.veripool.org/verilator/)和[Icarus Verilog](http://iverilog.icarus.com/)也是不错的选择，唯一的遗憾是Verilator对SystemVerilog和UVM的支持还不够好，从[issue](https://github.com/verilator/verilator/issues/2446)来看，官方也正在着手改进，希望能够尽快支持最新的SystemVerilog和UVM标准。
 
-Mentor的ModelSim集成在主要的FPGA厂商的IDE中，对于比较小的设计，可以免费使用。但是，作为主流EDA厂家的Simulator，ModelSim实在算不上是好用，工具栏都不能做到自动调整位置，拖动窗口的时候反应极为迟缓，怎么都想不通为什么这么个破玩意居然可以买到好几万。
+Mentor的ModelSim集成在主要的FPGA厂商的IDE中，对于比较小的设计，可以免费使用。但是，作为主流EDA厂家的Simulator，ModelSim实在算不上是好用，工具栏的位置每次切换布局都出问题，拖动窗口的时候反应极为迟缓，怎么都想不通为什么这么个破玩意居然可以买到好几万。
 
-Simulation的速度也是非常慢，很多Simulator只能单线程运行，多线程运行需要加钱，免费版的ModelSim按文档说法只有收费版本的1/4的速度，还有零有整的，怀疑里面每个操作都要额外多loop三次。
+Simulation的速度也是非常慢，很多Simulator只能单线程运行，多线程运行需要额外加钱，而且加速比也不高，甚至需要手工分割任务。免费版的ModelSim按文档说法只有收费版本的1/4的速度，还有零有整的，怀疑里面每个操作都要额外多loop三次。
 
 # Lint
 
-由于无论是仿真还是构建需要大量的时间，Lint工具也成了必不可少的组成部分。很多应该在语言层面加以禁止的问题，只有通过Lint工具才能发现。Lint工具中比较好的有Synopsys的SpyGlass，Aldec的Alint pro，估计价格也不菲。
+由于无论是仿真还是综合都需要大量时间，Lint工具也成了必不可少的组成部分。很多应该在语言层面加以禁止的问题，只有通过Lint工具才能发现。Lint工具中比较好的有Synopsys的SpyGlass，Aldec的Alint pro。
 
 # Verification
 
-正如软件中的TDD（Test Driven Development），RTL设计中Verification也是用来对RTL design做测试的重要步骤，目前主流使用的是UVM，号称是“方法学”，感觉就是一个单元测试框架罢了。同时，通过Verification也能获取coverage。
+类似于软件中的TDD（Test Driven Development），RTL设计中Verification也是用来对RTL design做测试的重要步骤，目前主流使用的是UVM，号称是“方法学”，其实就是一个单元测试框架罢了，呵呵。当然，通过Verification也能获取coverage。
 
 # 开发环境
 
-不像软件开发环境的百花齐放，HDL的编辑器要么功能简陋，要么价格奇贵。VIM和vscode加上一些插件后，基本能够满足作为editor的要求。语法高亮的，代码导航，Intellisense等功能虽说也有，但是谈不上好用。[Sigasi](https://www.sigasi.com/)和[DVT](https://dvteclipse.com/)看起来功能不错，但是性价比也相当低。
+不像软件开发环境的百花齐放，HDL的编辑器要么功能简陋，要么价格昂贵。VIM和vscode加上一些插件后，基本能够满足作为editor的要求。语法高亮的，代码导航，Intellisense等功能虽说也有，但是谈不上好用。[Sigasi](https://www.sigasi.com/)和[DVT](https://dvteclipse.com/)看起来功能不错。Aldec的ActiveHDL内置simulator，看起来也很好用。
 
 # 基础库和IP加密
 
-在软件开发中，一门语言或技术是否有着丰富的基础库，极大的影响着它的流行程度。在HDL中，特别是Verilog中，基本没有官方的标准库，除了基本的算术运算和位运算，基本没有太多的可以重用的库，延迟一拍这种常见的操作都需要自己实现，只能说目前的HDL语言的抽象程度太低了。
+在软件开发中，一门语言或技术是否有着丰富的标准库，极大的影响着它的流行程度。在HDL中，特别是Verilog中，基本没有官方的标准库，除了基本的算术运算和位运算，没有太多的可以重用的库，延迟一拍这种常见的操作都需要自己实现，只能说目前的HDL语言的抽象程度太低了。
 
-虽然没有基础库，但是各种IP还是不少的，但是IP的价格就不太有亲和力了。另外，IP一般也是被加密过的，目前采用的是IEEE-1735的标准。之前也有各家自己实现的不同方案，有生成binary格式的，有代码替换的，还有代码混淆的。估计出现了问题，也只能再付钱购买额外的服务，或者额外的代码授权了。
+虽然没有基础库，但是各种IP还是不少的，但是IP的价格就不太有亲和力了。IP一般也是被加密过的，目前主流是IEEE-1735标准。之前各家Simulator或者Synthesisor也有自己实现的私有方案，有使用binary格式的，有使用置换密码的，还有代码混淆的。如果出现了问题，也只能再付钱购买额外的服务，或者额外的代码授权了。
 
-后面我会展开讲一下IP加密。
+后面有时间，我会单独写一篇post展开讲一下IP加密。
 
 # 总结
 
-本文主要是我作为一个软件开发工程师，针对学习并实践RTL开发的过程中所遇到的问题做的一些总结和吐槽，希望以后还能有机会再进一步的深入到更底层的硬件开发。
+本文主要是我作为一个软件开发工程师，针对学习并实践RTL开发的过程中所遇到的问题做的一些总结和吐槽，希望能够帮助到对硬件开发有兴趣的朋友。
