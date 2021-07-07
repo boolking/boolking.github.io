@@ -7,8 +7,6 @@ tags:
 - SystemVerilog
 - hardware
 - FPGA
-- python
-- reverse engineering
 categories:
 - hardware
 summary: 最近忙于学习硬件开发，这篇post来谈谈一个软件开发者眼中的硬件开发吧。
@@ -91,7 +89,7 @@ Simulation的速度也是非常慢，很多Simulator只能单线程运行，多�
 
 # Lint
 
-由于无论是仿真还是综合都需要大量时间，Lint工具也成了必不可少的组成部分。很多应该在语言层面加以禁止的问题，只有通过Lint工具才能发现。Lint工具中比较好的有Synopsys的SpyGlass，Aldec的Alint pro。
+由于无论是仿真还是综合都需要大量时间，Lint工具也成了必不可少的组成部分。很多应该在语言层面加以禁止的问题，只有通过Lint工具才能发现。Lint工具中比较好的有Synopsys的SpyGlass，Aldec的[Alint pro](https://www.aldec.com/en/products/functional_verification/alint-pro)。
 
 # Verification
 
@@ -99,7 +97,7 @@ Simulation的速度也是非常慢，很多Simulator只能单线程运行，多�
 
 # 开发环境
 
-不像软件开发环境的百花齐放，HDL的编辑器要么功能简陋，要么价格昂贵。VIM和vscode加上一些插件后，基本能够满足作为editor的要求。语法高亮的，代码导航，Intellisense等功能虽说也有，但是谈不上好用。[Sigasi](https://www.sigasi.com/)和[DVT](https://dvteclipse.com/)看起来功能不错。Aldec的ActiveHDL内置simulator，看起来也很好用。
+不像软件开发环境的百花齐放，HDL的编辑器要么功能简陋，要么价格昂贵。VIM和vscode加上一些插件后，基本能够满足作为editor的要求。语法高亮的，代码导航，Intellisense等功能虽说也有，但是谈不上好用。[Sigasi](https://www.sigasi.com/)和[DVT](https://dvteclipse.com/)看起来功能不错。Aldec的[ActiveHDL](https://www.aldec.com/en/products/fpga_simulation/active-hdl)内置simulator，看起来也很好用。
 
 # 基础库和IP加密
 
