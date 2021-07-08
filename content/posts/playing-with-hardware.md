@@ -67,9 +67,9 @@ CDC导致的第二个问题，就是STA（静态时序分析）是无法对CDC�
 
 FPGA怎么做到可编程的呢？学过数字逻辑的同学都知道，所有的组合逻辑可以用LUT（lookup table）来完成。一般来说，FPGA中会将4输入LUT加上一个DFF构成一个基本的LE（逻辑单元），每个LE都可以进行对应的LUT的配置和是否使用DFF，再用连线将LE连接起来，因此就能够将我们前面所述的RTL转换到一个开关表（bitstream），表项对应每个LE内部的LUT/DFF是否使能，LE之间是否连线。
 
-在FPGA开发中，Synthesis将HDL转换为通用的硬件表示，对应到ASIC开发的前端流程，Placement&Routing则将通用的硬件表示映射为特定FPGA硬件中的LE及LE之间的连线，对应到ASIC开发的后端流程。
+在FPGA开发中，Synthesis将HDL转换为通用的硬件表示，对应到ASIC开发的前端流程，Place&Route则将通用的硬件表示映射为特定FPGA硬件中的LE及LE之间的连线，对应到ASIC开发的后端流程。
 
-通用的FPGA Synthesis工具有Synopsys的[Synplify](https://www.synopsys.com/implementation-and-signoff/fpga-based-design/synplify-pro.html)和Mentor的[Precision](https://eda.sw.siemens.com/en-US/ic/precision/rtl/)。Intel/Altera和Xilinx也有自己专用的Synthesis工具。Placement&Routing由于与具体的芯片关系紧密，各家FPGA厂商都是使用的自己的工具。
+通用的FPGA Synthesis工具有Synopsys的[Synplify](https://www.synopsys.com/implementation-and-signoff/fpga-based-design/synplify-pro.html)和Mentor的[Precision](https://eda.sw.siemens.com/en-US/ic/precision/rtl/)。Intel/Altera和Xilinx也有自己专用的Synthesis工具。Place&Route由于与具体的芯片关系紧密，各家FPGA厂商都是使用的自己的工具。
 
 FPGA中还集成了很多其他硬件，用于方便开发人员实现自己的功能，比如高速收发器用于对接外部的高速串行数据I/O，用于实现10G/40G以太网，HDMI等接口；硬核CPU用于控制；硬核memory controller可以极大的加快内存的访问速度。
 
