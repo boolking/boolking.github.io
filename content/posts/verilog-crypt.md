@@ -115,6 +115,7 @@ Aldec就提供一个[脚本](https://www.aldec.com/en/support/resources/document
   需要在解密后才能得到MII打头的私钥
 * 不保存完整的私钥，而是保存RSA的p/q/e等参数，直接采用p/q/e进行解密
   根据获取的p/q/e计算出phi，n和d，然后编码为ASN.1格式并base64后加上头尾即可
+  可以参考[rsatool](https://github.com/ius/rsatool)
 * 对解密过程进行混淆
   去除混淆，找到密钥
 
