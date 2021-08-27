@@ -151,7 +151,8 @@ IEEE-1735的加密文件样本：
 
 |vendor name                    |key name             |comment                      |
 |-------------------------------|---------------------|-----------------------------|
-|Cadence Design Systems.        |cds_key              |RC5，出现过两个版本不同的key    |
+|Cadence Design Systems.        |cds_key              |RC5，IUS/Xcelium出现过两个版本不同的key|
+|Cadence Design Systems.        |cds_key              |RC5/AES，Spectre有四个版本不同的key|
 |Cadence Design Systems.        |cds_nc_key           |RC5                          |
 |Cadence Design Systems.        |CDS_DATA_KEY         |直接加密data                  |
 |Synopsys VCS                   |VCS001               |加密算法VCS003，使用uuencode编码|
