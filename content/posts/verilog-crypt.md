@@ -104,6 +104,14 @@ Aldec就提供一个[脚本](https://www.aldec.com/en/support/resources/document
 
 当RSA密钥长度比较短时，可以通过暴力穷举的方式进行因数分解计算其私钥，目前主流的方法是[NFS](https://en.wikipedia.org/wiki/General_number_field_sieve)。可以使用GNNFS和MSEIVE等工具来进行，我尝试过分解一个512bit的RSA私钥，在目前主流的配置上不到1周时间可以分解成功。具体流程可以参考看雪的[两篇](https://bbs.pediy.com/thread-156206.htm)[贴子](https://bbs.pediy.com/thread-268842.htm)。
 
+附上CDS_RSA_KEY的公钥，有兴趣的可以自己分解一下：
+```
+-----BEGIN PUBLIC KEY-----
+MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAKz/7kNnLtjRpDHsWhg+zJOB1oSRfUPZ
+Odt3xmDEZkOvDHh4qxqcZQ08noEYUzuTVqLT0k9Fa2RAfNgOqzVudVsCAwEAAQ==
+-----END PUBLIC KEY-----
+```
+
 当RSA密钥长度为1024甚至2048的时候，暴力因数分解所需要的时间就是不可接受的了。
 
 ### 逆向工程找到私钥
@@ -156,7 +164,8 @@ IEEE-1735的加密文件样本：
 |Cadence Design Systems.        |cds_nc_key           |RC5                          |
 |Cadence Design Systems.        |CDS_DATA_KEY         |直接加密data                  |
 |Synopsys VCS                   |VCS001               |加密算法VCS003，使用uuencode编码|
-|Synopsys VCS                   |                     |早期VMT采用binary格式的加密数据 |
+|Synopsys VCS                   |                     |没有keyname和keymethod，直接使用\`protected和\`endprotected包裹，数据似乎也是采用uuencode编码，可能与上一种是同样的加密方式。出现在VIP的svp文件中。|
+|Synopsys VCS                   |                     |使用synenc进行数据加密，为binary格式，一般头为"D2 49 69 32 E3 B3 2A F2 FF 00 C3 89 22 C1 08 74"，后缀为.e/.vrp。DC中的DW库一般以这种格式加密，IP/VIP中也有很多文件采用这种方式加密。加密后数据DC/VCS/Synplify都可以读取|
 |Intel Quartus                  |                     |使用binary文件，AES密码保存在FlexLM license的vendor_string中|
 
 
