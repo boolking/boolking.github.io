@@ -146,7 +146,6 @@ IEEE-1735的加密文件样本：
 |Cadence Design Systems.        |CDS_RSA_KEY_VER_1    |RSA                          |
 |Mentor Graphics Corporation    |MGC-VERIF-SIM-RSA-1  |RSA，已废弃                   |
 |Mentor Graphics Corporation    |MGC-VERIF-SIM-RSA-2  |RSA                          |
-|Mentor Graphics Corporation    |MGC-VERIF-SIM-RSA-3  |RSA                          |
 |MTI                            |MGC-DVT-MTI          |RSA                          |
 |Xilinx                         |xilinx_2016_05       |RSA                          |
 |Synplicity                     |SYNP05_001           |RSA                          |
@@ -165,7 +164,7 @@ IEEE-1735的加密文件样本：
 |Cadence Design Systems.        |CDS_DATA_KEY         |直接加密data                  |
 |Synopsys VCS                   |VCS001               |加密算法VCS003，使用uuencode编码|
 |Synopsys VCS                   |                     |没有keyname和keymethod，直接使用\`protected和\`endprotected包裹，数据似乎也是采用uuencode编码，可能与上一种是同样的加密方式。出现在VIP的svp文件中。|
-|Synopsys VCS                   |                     |使用synenc进行数据加密，为binary格式，一般头为"D2 49 69 32 E3 B3 2A F2 FF 00 C3 89 22 C1 08 74"，后缀为.e/.vrp。DC中的DW库一般以这种格式加密，IP/VIP中也有很多文件采用这种方式加密。加密后数据DC/VCS/Synplify都可以读取|
+|Synopsys DC/VCS                |                     |使用synenc进行数据加密，为binary格式，一般头为"D2 49 69 32 E3 B3 2A F2 FF 00 C3 89 22 C1 08 74"，后缀为一般为.e，能支持vhdl/verilog/tcl/perl/dc_shell等格式的加密。DC中的DW库一般以这种格式加密，IP/VIP中也有很多文件采用这种方式加密。加密后数据DC/VCS/Synplify都可以读取|
 |Intel Quartus                  |                     |使用binary文件，AES密码保存在FlexLM license的vendor_string中|
 
 
