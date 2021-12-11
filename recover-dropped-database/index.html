@@ -1,0 +1,216 @@
+<!doctype html><html lang=zh-cn><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="noodp"><meta http-equiv=x-ua-compatible content="IE=edge, chrome=1"><title>记一次MySQL删库的恢复 - BoolKinG's Hack Notes</title><meta name=Description content="BoolKinG的技术博客"><meta property="og:title" content="记一次MySQL删库的恢复"><meta property="og:description" content="一次误操作导致整个数据库被drop，怎么恢复？"><meta property="og:type" content="article"><meta property="og:url" content="https://blog.boolking.ml/recover-dropped-database/"><meta property="article:published_time" content="2020-12-22T13:51:28+08:00"><meta property="article:modified_time" content="2020-12-22T13:51:28+08:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="记一次MySQL删库的恢复"><meta name=twitter:description content="一次误操作导致整个数据库被drop，怎么恢复？"><meta name=application-name content="LoveIt"><meta name=apple-mobile-web-app-title content="LoveIt"><meta name=theme-color content="#ffffff"><meta name=msapplication-TileColor content="#da532c"><link rel="shortcut icon" type=image/x-icon href=/favicon.ico><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=mask-icon href=/safari-pinned-tab.svg color=#5bbad5><link rel=manifest href=/site.webmanifest><link rel=canonical href=https://blog.boolking.ml/recover-dropped-database/><link rel=prev href=https://blog.boolking.ml/choose-static-generator/><link rel=next href=https://blog.boolking.ml/create-stream-xlsx/><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css><link rel=stylesheet href=/css/style.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css><script type=application/ld+json>{"@context":"http://schema.org","@type":"BlogPosting","headline":"记一次MySQL删库的恢复","inLanguage":"zh-CN","mainEntityOfPage":{"@type":"WebPage","@id":"https:\/\/blog.boolking.ml\/recover-dropped-database\/"},"image":["https:\/\/blog.boolking.ml\/images\/Apple-Devices-Preview.png"],"genre":"posts","keywords":"mysql, c\u002b\u002b, python, reverse engineering","wordcount":2661,"url":"https:\/\/blog.boolking.ml\/recover-dropped-database\/","datePublished":"2020-12-22T13:51:28+08:00","dateModified":"2020-12-22T13:51:28+08:00","license":"This work is licensed under a Creative Commons Attribution-NonCommercial 4.0 International License.","publisher":{"@type":"Organization","name":"boolking"},"author":{"@type":"Person","name":"boolking"},"description":""}</script></head><body header-desktop=fixed header-mobile=auto><script type=text/javascript>(window.localStorage&&localStorage.getItem('theme')?localStorage.getItem('theme')==='dark':('auto'==='auto'?window.matchMedia('(prefers-color-scheme: dark)').matches:'auto'==='dark'))&&document.body.setAttribute('theme','dark');</script><div id=mask></div><div class=wrapper><header class=desktop id=header-desktop><div class=header-wrapper><div class=header-title><a href=/ title="BoolKinG's Hack Notes">BoolKinG's Hack Notes</a></div><div class=menu><div class=menu-inner><a class=menu-item href=/posts/>所有文章 </a><a class=menu-item href=/tags/>标签 </a><a class=menu-item href=/categories/>分类 </a><a class=menu-item href=/about/>关于 </a><a class=menu-item href=https://github.com/boolking title=GitHub rel="noopener noreffer" target=_blank><i class="fab fa-github fa-fw"></i></a><span class="menu-item delimiter"></span><a href=javascript:void(0); class="menu-item theme-switch" title=切换主题><i class="fas fa-adjust fa-fw"></i></a></div></div></div></header><header class=mobile id=header-mobile><div class=header-container><div class=header-wrapper><div class=header-title><a href=/ title="BoolKinG's Hack Notes">BoolKinG's Hack Notes</a></div><div class=menu-toggle id=menu-toggle-mobile><span></span><span></span><span></span></div></div><div class=menu id=menu-mobile><a class=menu-item href=/posts/>所有文章</a><a class=menu-item href=/tags/>标签</a><a class=menu-item href=/categories/>分类</a><a class=menu-item href=/about/>关于</a><a class=menu-item href=https://github.com/boolking title=GitHub rel="noopener noreffer" target=_blank><i class="fab fa-github fa-fw"></i></a><a href=javascript:void(0); class="menu-item theme-switch" title=切换主题>
+<i class="fas fa-adjust fa-fw"></i></a></div></div></header><div class="search-dropdown desktop"><div id=search-dropdown-desktop></div></div><div class="search-dropdown mobile"><div id=search-dropdown-mobile></div></div><main class=main><div class=container><div class=toc id=toc-auto><h2 class=toc-title>目录</h2><div class="toc-content always-active" id=toc-content-auto></div></div><article class="page single"><h1 class="single-title animated flipInX">记一次MySQL删库的恢复</h1><div class=post-meta><div class=post-meta-line><span class=post-author><a href=https://boolking.github.io/ title=Author target=_blank rel="noopener noreffer author" class=author><i class="fas fa-user-circle fa-fw"></i>boolking</a></span>&nbsp;<span class=post-category>收录于 <a href=/categories/mysql/><i class="far fa-folder fa-fw"></i>mysql</a></span></div><div class=post-meta-line><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime=2020-12-22>2020-12-22</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;约 2661 字&nbsp;
+<i class="far fa-clock fa-fw"></i>&nbsp;预计阅读 6 分钟&nbsp;</div></div><div class="details toc" id=toc-static kept><div class="details-summary toc-title"><span>目录</span>
+<span><i class="details-icon fas fa-angle-right"></i></span></div><div class="details-content toc-content" id=toc-content-static><nav id=TableOfContents><ul><li><a href=#背景>背景</a></li><li><a href=#从磁盘恢复数据>从磁盘恢复数据</a><ul><li><a href=#twindb-data-recovery-toolkit使用>TwinDB data recovery toolkit使用</a></li></ul></li><li><a href=#从backup恢复>从backup恢复</a></li><li><a href=#从solr恢复>从solr恢复</a></li><li><a href=#从内存中恢复>从内存中恢复</a><ul><li><a href=#minidump文件格式>minidump文件格式</a></li><li><a href=#定位变量地址>定位变量地址</a></li><li><a href=#读取minidump>读取minidump</a></li></ul></li><li><a href=#总结>总结</a></li></ul></nav></div></div><div class=content id=content><h1 id=背景>背景</h1><p>最近正在做语音相关的工作，所有的语料数据都放在一个mysql数据库里面，同事一次误操作导致整个数据库被drop，里面包括了全部的文本语料和词库。
+数据库放在一台linux机器上，文件系统是XFS。</p><h1 id=从磁盘恢复数据>从磁盘恢复数据</h1><p>说实话，之前没有相关经验，只有先google一下看看有没有现成可以参考的解决方案。在<a href=https://dba.stackexchange.com/questions/23251/is-there-a-way-to-recover-a-dropped-mysql-database/72760 target=_blank rel="noopener noreffer">stackexchange</a>上看到有人提到<a href=https://github.com/twindb/undrop-for-innodb target=_blank rel="noopener noreffer">TwinDB data recovery toolkit</a>可以恢复，<strong>先需要停掉mysql，并停止一切写入</strong>，赶紧systemctl stop mysql，umount掉mysql database所在的disk。</p><p>MySQL 5.5之前是所有数据都放在ibdata1文件里面的，因此被删除的数据还在ibdata里面，而5.6之后是放在单独的目录里面，drop database/table是直接删除文件的。我们用的是8.0，不能直接扫描ibdata1，需要扫描整个磁盘，同时也意味着其他进程的写入也很可能导致数据被覆盖掉。不过既然是删除了文件，可以先试试能不能从xfs里面恢复删除的文件，找到一个<a href=https://github.com/ianka/xfs_undelete target=_blank rel="noopener noreffer">工具</a>，扫描了一遍磁盘，没能够找到对应的ibd文件。</p><h2 id=twindb-data-recovery-toolkit使用>TwinDB data recovery toolkit使用</h2><ol><li><p>先下载到本地编译</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-bash data-lang=bash>git clone https://github.com/twindb/undrop-for-innodb
+<span class=nb>cd</span> undrop-for-innodb
+make
+</code></pre></td></tr></table></div></div></li><li><p>使用stream_parser扫描整个磁盘</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-bash data-lang=bash>./stream_parser /dev/sdc1
+</code></pre></td></tr></table></div></div><p>会在当前目录下生成一个文件夹pages-XXX，XXX为扫描的文件名，我这里生成的是pages-sdc1，里面包含了FIL_PAGE_INDEX和FIL_PAGE_BLOB两个目录。</p></li><li><p>使用c_parser得到表corpora的ID，0000000000000001.page是存放SYS_TABLES的page文件</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-bash data-lang=bash>./c_parser -4f pages-sdc1/FIL_PAGE_INDEX/0000000000000001.page -t dictionary/SYS_TABLES.sql <span class=p>|</span> grep corpora
+
+<span class=m>000000000504</span>    <span class=m>85000001320110</span>  SYS_TABLES      <span class=s2>&#34;corpora&#34;</span>  <span class=m>54</span>      <span class=m>4</span>       <span class=m>1</span>       <span class=m>0</span>       <span class=m>0</span>       <span class=s2>&#34;&#34;</span>      <span class=m>1</span>
+</code></pre></td></tr></table></div></div><p>因为InnoDB的数据是放在primary index上的，通过获取primary index的ID，就能够得到存放数据的page文件。0000000000000003.page是存放SYS_INDEXES的page文件</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-bash data-lang=bash>./c_parser -4f pages-sdc1/FIL_PAGE_INDEX/0000000000000003.page -t dictionary/SYS_INDEXES.sql <span class=p>|</span> grep <span class=m>54</span>
+
+<span class=m>000000000504</span>    <span class=m>85000001320178</span>  SYS_INDEXES     <span class=m>54</span>      <span class=m>112</span>      <span class=s2>&#34;PRIMARY&#34;</span>       <span class=m>1</span>       <span class=m>3</span>       <span class=m>1</span>       <span class=m>3</span>
+</code></pre></td></tr></table></div></div><p>找到了corpora的数据是在0000000000000112.page文件里面的
+在恢复数据之前需要先确定表结构，还好我们知道，创建一个包含corpora DDL的sql文件放到corpora.sql</p></li><li><p>恢复数据</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-bash data-lang=bash>mkdir -p  dumps/default
+./c_parser -6f pages-sdc1/FIL_PAGE_INDEX/0000000000000112.page <span class=se>\
+</span><span class=se></span>    -t corpora.sql &gt; dumps/default/corpora 2&gt; dumps/default/corpora.sql
+</code></pre></td></tr></table></div></div><p>运行完成后，看看是否恢复成功</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-bash data-lang=bash>head -100 dumps/default/corpora
+</code></pre></td></tr></table></div></div><p>很遗憾，数据不全，而且还有很多错误数据，看来已经被覆盖掉了不少page。尝试恢复另外两张表也没什么收获。难道只能从删库到跑路了？</p></li></ol><h1 id=从backup恢复>从backup恢复</h1><p>之前有做一个定时backup的脚本，每天半夜进行backup，赶紧到backup的机器上看看，结果发现最近一次的backup是3个月前的了。执行</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-bash data-lang=bash>crontab -l
+</code></pre></td></tr></table></div></div><p>是有对应的命令的，查了一下，<a href=https://serverfault.com/questions/449651/why-is-my-crontab-not-working-and-how-can-i-troubleshoot-it target=_blank rel="noopener noreffer">有人说</a>crontab命令后面必须有一行空行才能正确执行，还不确定是否是这个导致，顺手改掉，后面再定时检查。</p><h1 id=从solr恢复>从solr恢复</h1><p>还好文字语料在solr中是有cache的，用于加速查询，赶紧连接到solr中，dump到文件中</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt>1
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-bash data-lang=bash>curl <span class=s2>&#34;http://solr-server/solr/corpora/select?q=*:*&amp;wt=csv&amp;indent=true&amp;rows=26159501&#34;</span> -o corpora.csv
+</code></pre></td></tr></table></div></div><p>有了csv文件，写一个python脚本直接导入即可。</p><h1 id=从内存中恢复>从内存中恢复</h1><p>但是还有词表没恢复，这张表是没有solr缓存的，怎么办？
+还好，我们有一个在线分词查询程序，会将词表cache到内存中，这是一个python写的http server，分词是使用c++实现的DLL，运行在windows上。</p><p>词表保存在一个hash table里面，结构如下：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-c++ data-lang=c++><span class=k>struct</span> <span class=nc>Word</span>
+<span class=p>{</span>
+    <span class=kt>unsigned</span> <span class=kt>char</span>   <span class=n>nbytes</span><span class=p>;</span>   <span class=cm>/* number of bytes */</span>
+    <span class=kt>char</span>            <span class=n>length</span><span class=p>;</span>   <span class=cm>/* number of characters */</span>
+    <span class=kt>unsigned</span> <span class=kt>int</span>    <span class=n>freq</span><span class=p>;</span>
+    <span class=kt>char</span>            <span class=n>text</span><span class=p>[</span><span class=n>word_embed_len</span><span class=p>];</span>
+<span class=p>};</span>
+<span class=k>struct</span> <span class=nc>Entry</span>
+<span class=p>{</span>
+    <span class=n>Word</span> <span class=o>*</span><span class=n>word</span><span class=p>;</span>
+    <span class=n>Entry</span> <span class=o>*</span><span class=n>next</span><span class=p>;</span>
+<span class=p>};</span>
+<span class=k>static</span> <span class=n>Entry</span> <span class=o>**</span><span class=n>bins</span> <span class=o>=</span> <span class=k>static_cast</span><span class=o>&lt;</span><span class=n>Entry</span> <span class=o>**&gt;</span><span class=p>(</span><span class=n>std</span><span class=o>::</span><span class=n>calloc</span><span class=p>(</span><span class=n>init_size</span><span class=p>,</span>
+                                            <span class=k>sizeof</span><span class=p>(</span><span class=n>Entry</span> <span class=o>*</span><span class=p>)));</span>
+</code></pre></td></tr></table></div></div><p>从代码可以看出来，用的是<a href=https://en.wikipedia.org/wiki/Hash_table#Separate_chaining target=_blank rel="noopener noreffer">Seperated chaining</a>方式存放的，如下图：</p><p><img class=lazyload src=/svg/loading.min.svg data-src=/img/Hash_table.png data-srcset="/img/Hash_table.png, /img/Hash_table.png 1.5x, /img/Hash_table.png 2x" data-sizes=auto alt=/img/Hash_table.png title="Hash table"></p><p>怎么从内存中还原词表呢？有两种方法：</p><ul><li><a href=https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory target=_blank rel="noopener noreffer">ReadProcessMemory()</a>：直接读取进程的内存空间</li><li><a href=https://en.wikipedia.org/wiki/Core_dump#MINIDUMP target=_blank rel="noopener noreffer">MiniDump文件</a>：保存为Minidump文件，然后读取这个文件</li></ul><p>我选择第二个，使用<a href=https://docs.microsoft.com/en-us/sysinternals/downloads/process-explorer target=_blank rel="noopener noreffer">Process Explorer</a>保存一个dump文件。这里需要注意，<strong>必须保存full dump，否则Heap不会保存，后续无法获取heap中的数据</strong>。</p><h2 id=minidump文件格式>minidump文件格式</h2><p>不像其他文件格式，MS对minidump文件的格式描述还是很清楚的，在<a href=https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ target=_blank rel="noopener noreffer">这里</a>可以找到。有人已经给我们写好了<a href=https://github.com/skelsec/minidump target=_blank rel="noopener noreffer">python解析minidump的库</a>，我们只需要找到全局变量数组bins，然后遍历这个数组找出所有的Word即可。</p><h2 id=定位变量地址>定位变量地址</h2><p>在windows中，一个进程运行时是有自己独立进程空间的，这个进程依赖的DLL都会作为module被加载到这个进程的地址空间中来，我们在minidump中可以找到这个DLL所在的base address，然后在这个DLL中定位到这个变量所在offset，两者相加即可得到这个变量在整个进程空间中的地址。</p><p>minidump中包含了所有module的相关信息，而变量的偏移地址，就需要借助一些其他方法来获取了。如果有DLL对应的PDB文件，则比较容易，但是这个DLL的PDB文件也没有保存下来，只能想其他办法。</p><p>使用IDA Pro，打开这个DLL，通过exported function，很容易定位到这个操作这个变量的函数，然后在这个函数中找到这个全局变量的位置，然后用这个地址减去IDA加载DLL时的base address，就得到了这个变量的offset。</p><p>有了offset，接下来就是遍历hash table了。这里我使用了python的struct库来进行数据的数据的读取。</p><h2 id=读取minidump>读取minidump</h2><p>minidump这个库给我们提供了方便进行内存位置读取的方法，简化后的代码如下：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span><span class=lnt>65
+</span><span class=lnt>66
+</span><span class=lnt>67
+</span><span class=lnt>68
+</span><span class=lnt>69
+</span><span class=lnt>70
+</span><span class=lnt>71
+</span><span class=lnt>72
+</span><span class=lnt>73
+</span><span class=lnt>74
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-python data-lang=python><span class=kn>from</span> <span class=nn>minidump.minidumpfile</span> <span class=kn>import</span> <span class=n>MinidumpFile</span>
+<span class=kn>from</span> <span class=nn>minidump.minidumpreader</span> <span class=kn>import</span> <span class=n>MinidumpFileReader</span>
+<span class=kn>import</span> <span class=nn>struct</span>
+
+<span class=n>INT_SIZE</span> <span class=o>=</span> <span class=mi>4</span>
+<span class=n>PTR_SIZE</span> <span class=o>=</span> <span class=mi>8</span>
+
+<span class=k>class</span> <span class=nc>Word</span><span class=p>:</span>
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>reader</span><span class=p>,</span> <span class=n>ptr</span><span class=p>):</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>reader</span> <span class=o>=</span> <span class=n>reader</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>ptr</span> <span class=o>=</span> <span class=n>ptr</span>
+        <span class=n>buf</span> <span class=o>=</span> <span class=n>reader</span><span class=o>.</span><span class=n>read</span><span class=p>(</span><span class=n>ptr</span><span class=p>,</span> <span class=mi>8</span><span class=p>)</span>
+        <span class=c1># ignore padding between length and freq</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>nbytes</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>length</span><span class=p>,</span> <span class=n>padding</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>freq</span> <span class=o>=</span> <span class=n>struct</span><span class=o>.</span><span class=n>unpack</span><span class=p>(</span><span class=s1>&#39;&lt;BBHL&#39;</span><span class=p>,</span> <span class=n>buf</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>nbytes</span> <span class=o>&gt;</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>text</span> <span class=o>=</span> <span class=n>reader</span><span class=o>.</span><span class=n>read</span><span class=p>(</span><span class=n>ptr</span> <span class=o>+</span> <span class=mi>8</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>nbytes</span><span class=p>)</span><span class=o>.</span><span class=n>decode</span><span class=p>(</span><span class=s1>&#39;utf8&#39;</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>text</span> <span class=o>=</span> <span class=s1>&#39;&#39;</span>
+
+    <span class=k>def</span> <span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>nbytes</span> <span class=o>&gt;</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>return</span> <span class=s1>&#39;text: {}, freq: {}&#39;</span><span class=o>.</span><span class=n>format</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>text</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>freq</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=k>return</span> <span class=s1>&#39;&lt;EMPTY&gt;&#39;</span>
+
+<span class=k>class</span> <span class=nc>Entry</span><span class=p>:</span>
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>reader</span><span class=p>,</span> <span class=n>ptr</span><span class=p>):</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>reader</span> <span class=o>=</span> <span class=n>reader</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>ptr</span> <span class=o>=</span> <span class=n>ptr</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>word</span> <span class=o>=</span> <span class=bp>None</span>
+
+        <span class=n>buf</span> <span class=o>=</span> <span class=n>reader</span><span class=o>.</span><span class=n>read</span><span class=p>(</span><span class=n>ptr</span><span class=p>,</span> <span class=mi>2</span> <span class=o>*</span> <span class=n>PTR_SIZE</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>pword</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>pnext</span> <span class=o>=</span> <span class=n>struct</span><span class=o>.</span><span class=n>unpack</span><span class=p>(</span><span class=s1>&#39;&lt;QQ&#39;</span><span class=p>,</span> <span class=n>buf</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>pword</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>word</span> <span class=o>=</span> <span class=n>Word</span><span class=p>(</span><span class=n>reader</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>pword</span><span class=p>)</span>
+
+    <span class=k>def</span> <span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>pword</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>return</span> <span class=s1>&#39;{}, pnext: {:x}&#39;</span><span class=o>.</span><span class=n>format</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>word</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>pnext</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=k>return</span> <span class=s1>&#39;pnext:{:x}&#39;</span><span class=o>.</span><span class=n>format</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>pnext</span><span class=p>)</span>
+
+<span class=k>def</span> <span class=nf>process_entry</span><span class=p>(</span><span class=n>entry</span><span class=p>):</span>
+    <span class=k>pass</span>
+
+<span class=k>def</span> <span class=nf>main</span><span class=p>():</span>
+    <span class=n>mp</span> <span class=o>=</span> <span class=n>MinidumpFile</span><span class=o>.</span><span class=n>parse</span><span class=p>(</span><span class=s1>&#39;python.dmp&#39;</span><span class=p>)</span>
+    <span class=n>reader</span> <span class=o>=</span> <span class=n>MinidumpFileReader</span><span class=p>(</span><span class=n>mp</span><span class=p>)</span>
+
+    <span class=n>dll</span> <span class=o>=</span> <span class=n>reader</span><span class=o>.</span><span class=n>get_module_by_name</span><span class=p>(</span><span class=s1>&#39;XXX.dll&#39;</span><span class=p>)</span>
+    <span class=n>baseaddr</span> <span class=o>=</span> <span class=n>dll</span><span class=o>.</span><span class=n>baseaddress</span>
+
+    <span class=c1># get offset from IDA Pro</span>
+    <span class=n>p_n_bins</span> <span class=o>=</span> <span class=n>baseaddr</span> <span class=o>+</span> <span class=mh>0x1EA58</span>
+    <span class=n>pp_bins</span> <span class=o>=</span> <span class=n>baseaddr</span> <span class=o>+</span> <span class=mh>0x1FD60</span>
+
+    <span class=n>p_bins</span> <span class=o>=</span> <span class=n>struct</span><span class=o>.</span><span class=n>unpack</span><span class=p>(</span><span class=s1>&#39;&lt;Q&#39;</span><span class=p>,</span> <span class=n>reader</span><span class=o>.</span><span class=n>read</span><span class=p>(</span><span class=n>pp_bins</span><span class=p>,</span> <span class=n>PTR_SIZE</span><span class=p>))[</span><span class=mi>0</span><span class=p>]</span>
+    <span class=n>n_bins</span> <span class=o>=</span> <span class=n>struct</span><span class=o>.</span><span class=n>unpack</span><span class=p>(</span><span class=s1>&#39;&lt;L&#39;</span><span class=p>,</span> <span class=n>reader</span><span class=o>.</span><span class=n>read</span><span class=p>(</span><span class=n>p_n_bins</span><span class=p>,</span> <span class=n>INT_SIZE</span><span class=p>))[</span><span class=mi>0</span><span class=p>]</span>
+
+
+    <span class=k>print</span><span class=p>(</span><span class=s1>&#39;p_n_bins: {:x}, n_bins: {:x}&#39;</span><span class=o>.</span><span class=n>format</span><span class=p>(</span><span class=n>p_n_bins</span><span class=p>,</span> <span class=n>n_bins</span><span class=p>))</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_bins</span><span class=p>):</span>
+        <span class=n>pentry</span> <span class=o>=</span> <span class=n>struct</span><span class=o>.</span><span class=n>unpack</span><span class=p>(</span><span class=s1>&#39;&lt;Q&#39;</span><span class=p>,</span> <span class=n>reader</span><span class=o>.</span><span class=n>read</span><span class=p>(</span> <span class=n>p_bins</span> <span class=o>+</span> <span class=n>i</span> <span class=o>*</span> <span class=n>PTR_SIZE</span><span class=p>,</span> <span class=n>PTR_SIZE</span><span class=p>))[</span><span class=mi>0</span><span class=p>]</span>
+        <span class=k>if</span> <span class=n>pentry</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>entry</span> <span class=o>=</span> <span class=n>Entry</span><span class=p>(</span><span class=n>reader</span><span class=p>,</span> <span class=n>pentry</span><span class=p>)</span>
+            <span class=n>process_word</span><span class=p>(</span><span class=n>entry</span><span class=p>)</span>
+
+            <span class=k>while</span> <span class=n>entry</span><span class=o>.</span><span class=n>pnext</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=n>entry</span> <span class=o>=</span> <span class=n>Entry</span><span class=p>(</span><span class=n>reader</span><span class=p>,</span> <span class=n>entry</span><span class=o>.</span><span class=n>pnext</span><span class=p>)</span>
+                <span class=n>process_entry</span><span class=p>(</span><span class=n>entry</span><span class=p>)</span>
+
+
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s1>&#39;__main__&#39;</span><span class=p>:</span>
+    <span class=n>main</span><span class=p>()</span>
+</code></pre></td></tr></table></div></div><h1 id=总结>总结</h1><ol><li>出现误删，一定要马上停止写入，umount磁盘，如果有可能，尽量保留磁盘镜像</li><li>数据库的权限如果没有设置好，会导致很容易就能删库跑路</li><li>数据库的备份没有起作用，一定要定时检查备份脚本是否正常工作</li><li>后面有时间对InnoDB的结构进行一下分析</li></ol></div><div class=post-footer id=post-footer><div class=post-info><div class=post-info-line><div class=post-info-mod><span>更新于 2020-12-22</span></div><div class=post-info-license></div></div><div class=post-info-line><div class=post-info-md></div><div class=post-info-share><span></span></div></div></div><div class=post-info-more><section class=post-tags><i class="fas fa-tags fa-fw"></i>&nbsp;<a href=/tags/mysql/>mysql</a>,&nbsp;<a href=/tags/c++/>c++</a>,&nbsp;<a href=/tags/python/>python</a>,&nbsp;<a href=/tags/reverse-engineering/>reverse engineering</a></section><section><span><a href=javascript:void(0); onclick=window.history.back();>返回</a></span>&nbsp;|&nbsp;<span><a href=/>主页</a></span></section></div><div class=post-nav><a href=/choose-static-generator/ class=prev rel=prev title=静态网站生成工具选择><i class="fas fa-angle-left fa-fw"></i>静态网站生成工具选择</a>
+<a href=/create-stream-xlsx/ class=next rel=next title=如何流式导出xlsx/zip文件>如何流式导出xlsx/zip文件<i class="fas fa-angle-right fa-fw"></i></a></div></div><div id=comments><div id=disqus_thread class=comment></div><noscript>Please enable JavaScript to view the comments powered by <a href=https://disqus.com/?ref_noscript>Disqus</a>.</noscript></div></article></div></main><footer class=footer><div class=footer-container><div class=footer-line><i class="far fa-copyright fa-fw"></i><span itemprop=copyrightYear>2020 - 2021</span><span class=author itemprop=copyrightHolder>&nbsp;<a href=https://boolking.github.io/ target=_blank>boolking</a></span>&nbsp;|&nbsp;<span class=license><a rel="license external nofollow noopener noreffer" href=https://creativecommons.org/licenses/by-nc/4.0/ target=_blank>CC BY-NC 4.0</a></span></div></div></footer></div><div id=fixed-buttons><a href=# id=back-to-top class=fixed-button title=回到顶部><i class="fas fa-arrow-up fa-fw"></i></a><a href=# id=view-comments class=fixed-button title=查看评论><i class="fas fa-comment fa-fw"></i></a></div><script type=text/javascript src=https://boolking-1.disqus.com/embed.js defer></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js></script><script type=text/javascript>window.config={"code":{"copyTitle":"复制到剪贴板","maxShownLines":100},"comment":{}};</script><script type=text/javascript src=/js/theme.min.js></script></body></html>

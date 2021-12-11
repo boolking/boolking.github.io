@@ -1,0 +1,347 @@
+<!doctype html><html lang=zh-cn><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="noodp"><meta http-equiv=x-ua-compatible content="IE=edge, chrome=1"><title>如何流式导出xlsx/zip文件 - BoolKinG's Hack Notes</title><meta name=Description content="BoolKinG的技术博客"><meta property="og:title" content="如何流式导出xlsx/zip文件"><meta property="og:description" content="导出数据的时候，经常需要支持MS xlsx文件格式。当导出数据量比较大的时候，如果先创建文件，再将文件通过http接口下载，将有可能导致下载前需要等待很长时间，而且需要考虑文件回收的问题。本文将提供一种流式生成xlsx/zip文件的思路。"><meta property="og:type" content="article"><meta property="og:url" content="https://blog.boolking.ml/create-stream-xlsx/"><meta property="article:published_time" content="2021-01-03T09:08:16+08:00"><meta property="article:modified_time" content="2021-01-03T09:08:16+08:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="如何流式导出xlsx/zip文件"><meta name=twitter:description content="导出数据的时候，经常需要支持MS xlsx文件格式。当导出数据量比较大的时候，如果先创建文件，再将文件通过http接口下载，将有可能导致下载前需要等待很长时间，而且需要考虑文件回收的问题。本文将提供一种流式生成xlsx/zip文件的思路。"><meta name=application-name content="LoveIt"><meta name=apple-mobile-web-app-title content="LoveIt"><meta name=theme-color content="#ffffff"><meta name=msapplication-TileColor content="#da532c"><link rel="shortcut icon" type=image/x-icon href=/favicon.ico><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=mask-icon href=/safari-pinned-tab.svg color=#5bbad5><link rel=manifest href=/site.webmanifest><link rel=canonical href=https://blog.boolking.ml/create-stream-xlsx/><link rel=prev href=https://blog.boolking.ml/recover-dropped-database/><link rel=next href=https://blog.boolking.ml/playing-with-hardware/><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css><link rel=stylesheet href=/css/style.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css><script type=application/ld+json>{"@context":"http://schema.org","@type":"BlogPosting","headline":"如何流式导出xlsx/zip文件","inLanguage":"zh-CN","mainEntityOfPage":{"@type":"WebPage","@id":"https:\/\/blog.boolking.ml\/create-stream-xlsx\/"},"image":["https:\/\/blog.boolking.ml\/images\/Apple-Devices-Preview.png"],"genre":"posts","keywords":"xlsx, zip, golang, java, python","wordcount":3009,"url":"https:\/\/blog.boolking.ml\/create-stream-xlsx\/","datePublished":"2021-01-03T09:08:16+08:00","dateModified":"2021-01-03T09:08:16+08:00","license":"This work is licensed under a Creative Commons Attribution-NonCommercial 4.0 International License.","publisher":{"@type":"Organization","name":"boolking"},"author":{"@type":"Person","name":"boolking"},"description":""}</script></head><body header-desktop=fixed header-mobile=auto><script type=text/javascript>(window.localStorage&&localStorage.getItem('theme')?localStorage.getItem('theme')==='dark':('auto'==='auto'?window.matchMedia('(prefers-color-scheme: dark)').matches:'auto'==='dark'))&&document.body.setAttribute('theme','dark');</script><div id=mask></div><div class=wrapper><header class=desktop id=header-desktop><div class=header-wrapper><div class=header-title><a href=/ title="BoolKinG's Hack Notes">BoolKinG's Hack Notes</a></div><div class=menu><div class=menu-inner><a class=menu-item href=/posts/>所有文章 </a><a class=menu-item href=/tags/>标签 </a><a class=menu-item href=/categories/>分类 </a><a class=menu-item href=/about/>关于 </a><a class=menu-item href=https://github.com/boolking title=GitHub rel="noopener noreffer" target=_blank><i class="fab fa-github fa-fw"></i></a><span class="menu-item delimiter"></span><a href=javascript:void(0); class="menu-item theme-switch" title=切换主题><i class="fas fa-adjust fa-fw"></i></a></div></div></div></header><header class=mobile id=header-mobile><div class=header-container><div class=header-wrapper><div class=header-title><a href=/ title="BoolKinG's Hack Notes">BoolKinG's Hack Notes</a></div><div class=menu-toggle id=menu-toggle-mobile><span></span><span></span><span></span></div></div><div class=menu id=menu-mobile><a class=menu-item href=/posts/>所有文章</a><a class=menu-item href=/tags/>标签</a><a class=menu-item href=/categories/>分类</a><a class=menu-item href=/about/>关于</a><a class=menu-item href=https://github.com/boolking title=GitHub rel="noopener noreffer" target=_blank><i class="fab fa-github fa-fw"></i></a><a href=javascript:void(0); class="menu-item theme-switch" title=切换主题>
+<i class="fas fa-adjust fa-fw"></i></a></div></div></header><div class="search-dropdown desktop"><div id=search-dropdown-desktop></div></div><div class="search-dropdown mobile"><div id=search-dropdown-mobile></div></div><main class=main><div class=container><div class=toc id=toc-auto><h2 class=toc-title>目录</h2><div class="toc-content always-active" id=toc-content-auto></div></div><article class="page single"><h1 class="single-title animated flipInX">如何流式导出xlsx/zip文件</h1><div class=post-meta><div class=post-meta-line><span class=post-author><a href=https://boolking.github.io/ title=Author target=_blank rel="noopener noreffer author" class=author><i class="fas fa-user-circle fa-fw"></i>boolking</a></span>&nbsp;<span class=post-category>收录于 <a href=/categories/golang/><i class="far fa-folder fa-fw"></i>golang</a></span></div><div class=post-meta-line><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime=2021-01-03>2021-01-03</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;约 3009 字&nbsp;
+<i class="far fa-clock fa-fw"></i>&nbsp;预计阅读 7 分钟&nbsp;</div></div><div class="details toc" id=toc-static kept><div class="details-summary toc-title"><span>目录</span>
+<span><i class="details-icon fas fa-angle-right"></i></span></div><div class="details-content toc-content" id=toc-content-static><nav id=TableOfContents><ul><li><ul><li><a href=#应用场景>应用场景</a></li><li><a href=#xlsx文件格式>xlsx文件格式</a><ul><li><a href=#zip文件格式简介>zip文件格式简介</a></li><li><a href=#文件记录>文件记录</a></li><li><a href=#xlsx文件内容>xlsx文件内容</a></li></ul></li><li><a href=#根据数据生成流式xlsx文件>根据数据生成流式xlsx文件</a></li><li><a href=#流式http文件下载>流式HTTP文件下载</a></li></ul></li></ul></nav></div></div><div class=content id=content><h2 id=应用场景>应用场景</h2><p>在后端系统中，可能需要支持数据导出为xlsx文件的功能，当数据量很大时，如果先创建文件，然后通过HTTP接口进行下载，则在文件生成前，浏览器端会出现下载已经开始，但是没有任何数据传输的情况，用户体验很差，而且在服务器端要浪费磁盘空间和CPU时间来进行文件打包，下载完成/中断后还需要删除临时文件。</p><p>类似的情况还有数据打包操作，比如在网盘应用中，用户希望一次性下载多个文件，而浏览器可能会拦截除第一个外的其他文件下载，也会导致用户体验变差。在百度网盘和google drive中，当需要下载一个目录时，会将这个目录打包为一个zip文件后再下载，从而规避浏览器的这个限制。</p><h2 id=xlsx文件格式>xlsx文件格式</h2><p>要想生成xlsx文件，需要了解其文件格式，根据<a href=https://www.ecma-international.org/publications/standards/Ecma-376.htm target=_blank rel="noopener noreffer">Ecma Office Open XML Part 2</a>可知，xlsx是一个zip文件，所以我们先来看看<a href=https://en.wikipedia.org/wiki/zip_%28file_format%29 target=_blank rel="noopener noreffer">zip文件格式</a>。</p><h3 id=zip文件格式简介>zip文件格式简介</h3><p><img class=lazyload src=/svg/loading.min.svg data-src=/img/ZIP-64_Internal_Layout.png data-srcset="/img/ZIP-64_Internal_Layout.png, /img/ZIP-64_Internal_Layout.png 1.5x, /img/ZIP-64_Internal_Layout.png 2x" data-sizes=auto alt=/img/ZIP-64_Internal_Layout.png title="zip layout"></p><p>从上图可以看出，zip文件格式分为多个文件记录和central directory两部分。文件记录包括local file header和文件内容（还可以包含可选的data descriptor和encryption header）。文件记录可以分布在zip中的任意位置，文件记录之间可以有空隙。在zip文件最后有一个central directory来指明文件记录在zip中所在位置。</p><p>之所以采用这种布局，是为了支持：</p><ul><li><strong>生成流式zip文件</strong></li><li>添加新文件不需要重新打包旧的文件，只需要在文件结尾处添加新文件并重新生成新的central directory</li><li>在zip文件头添加其他数据，如自解压头</li><li>在其他文件中嵌入zip文件</li></ul><p>上面的图中还有一个重要的部分没有绘制出来，就是data descriptor，根据<a href=https://pkware.cachefly.net/webdocs/APPNOTE/APPNOTE-6.3.9.TXT target=_blank rel="noopener noreffer">zip format SPEC</a>：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-fallback data-lang=fallback>[local file header 1]
+[encryption header 1]
+[file data 1]
+[data descriptor 1]
+.
+.
+.
+[local file header n]
+[encryption header n]
+[file data n]
+[data descriptor n]
+[archive decryption header]
+[archive extra data record]
+[central directory header 1]
+.
+.
+.
+[central directory header n]
+[zip64 end of central directory record]
+[zip64 end of central directory locator]
+[end of central directory record]
+</code></pre></td></tr></table></div></div><p>我们可以看到一个文件记录最开始是一个local file header，后面是可选的encryption header，接下来是文件内容，最后是一个可选的data descriptor。data descriptor就是用于支持流式zip文件生成而必须的部分。</p><h3 id=文件记录>文件记录</h3><p>下面我们详细说明一下文件记录中的各个组成部分：</p><ul><li>local file header<div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-fallback data-lang=fallback>local file header signature     4 bytes  (0x04034b50)
+version needed to extract       2 bytes
+general purpose bit flag        2 bytes
+compression method              2 bytes
+last mod file time              2 bytes
+last mod file date              2 bytes
+crc-32                          4 bytes
+compressed size                 4 bytes
+uncompressed size               4 bytes
+file name length                2 bytes
+extra field length              2 bytes
+
+file name (variable size)
+extra field (variable size)
+</code></pre></td></tr></table></div></div></li><li>data descriptor<div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-fallback data-lang=fallback>crc-32                          4 bytes
+compressed size                 4 bytes
+uncompressed size               4 bytes
+</code></pre></td></tr></table></div></div></li></ul><p>可以看到，在local file header和data descriptor中都包含了crc-32、compressed size和uncompressed size。
+为什么要重复记录呢？当文件内容是实时生成的时候，这三个值都是无法预先知道的，只有在写入完成后才能得到。因此在生成流式文件的时候：</p><ol><li>在写入的local file header中设置general purpose bit flag的bit 3为1，指明这三个值需要从data descriptor中读取，并将其值都设置为0；</li><li>写入数据，同时计算crc-32，记录compressed size和uncompressed size；</li><li>将正确的crc-32、compressed size和uncompressed size写入data descriptor中；</li><li>将所有写入文件的偏移写入到central directory中，完成文件传输。</li></ol><p>当需要写入的文件已经存在时，我们甚至可以预先计算好文件对应的crc-32值，当生成流式zip文件时，compression method字段采用store(0)模式，这种模式下文件数据不压缩，compressed size和uncompressed size大小一致。此时，zip文件中所有数据的位置和值都是可以预先确定的，从而支持<strong>断点续传和多线程下载流式zip文件</strong>，具体实现可以参考<a href=https://github.com/evanmiller/mod_zip target=_blank rel="noopener noreffer">nginx zip module</a>。这种方式可以用于在网盘应用中下载包含多个文件的zip包，</p><h3 id=xlsx文件内容>xlsx文件内容</h3><p>简单来说，xlsx就是一个包含多个xml文件的zip包，其中大部分是固定内容的xml文件。我们可以新建一个空的xlsx文件，unzip后就能看到其中的文件：</p><ul><li>_rels/.rels</li><li>docProps/app.xml</li><li>docProps/core.xml</li><li>xl/_rels/workbook.xml.rels</li><li>xl/theme/theme1.xml</li><li>xl/styles.xml</li><li>[Content_Types].xml</li><li>xl/workbook.xml</li><li><strong>xl/worksheets/sheet1.xml</strong></li><li>&mldr;</li></ul><p>当只有一个工作簿的时候，工作簿数据一般存放在xl/worksheets/sheet1.xml文件。如果需要支持多个工作簿和其他高级功能，需要参考<a href=https://www.ecma-international.org/publications/standards/Ecma-376.htm target=_blank rel="noopener noreffer">Standard ECMA-376
+Office Open XML File Formats</a>。</p><p>xl/worksheets/sheet1.xml文件格式如下：</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span><span class=lnt>65
+</span><span class=lnt>66
+</span><span class=lnt>67
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-xml data-lang=xml><span class=cp>&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34; standalone=&#34;yes&#34;?&gt;</span>
+<span class=nt>&lt;worksheet</span> <span class=na>xmlns=</span><span class=s>&#34;http://schemas.openxmlformats.org/spreadsheetml/2006/main&#34;</span>
+  <span class=na>xmlns:r=</span><span class=s>&#34;http://schemas.openxmlformats.org/officeDocument/2006/relationships&#34;</span>
+  <span class=na>xmlns:mc=</span><span class=s>&#34;http://schemas.openxmlformats.org/markup-compatibility/2006&#34;</span> <span class=na>mc:Ignorable=</span><span class=s>&#34;x14ac xr xr2 xr3&#34;</span>
+  <span class=na>xmlns:x14ac=</span><span class=s>&#34;http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac&#34;</span>
+  <span class=na>xmlns:xr=</span><span class=s>&#34;http://schemas.microsoft.com/office/spreadsheetml/2014/revision&#34;</span>
+  <span class=na>xmlns:xr2=</span><span class=s>&#34;http://schemas.microsoft.com/office/spreadsheetml/2015/revision2&#34;</span>
+  <span class=na>xmlns:xr3=</span><span class=s>&#34;http://schemas.microsoft.com/office/spreadsheetml/2016/revision3&#34;</span> <span class=na>xr:uid=</span><span class=s>&#34;{A45FA7EE-319C-4F2A-BADD-CBFF345C308D}&#34;</span><span class=nt>&gt;</span>
+  <span class=nt>&lt;cols&gt;</span>
+    <span class=nt>&lt;col</span> <span class=na>min=</span><span class=s>&#34;1&#34;</span> <span class=na>max=</span><span class=s>&#34;1&#34;</span> <span class=na>width=</span><span class=s>&#34;20&#34;</span> <span class=nt>/&gt;</span>
+    <span class=nt>&lt;col</span> <span class=na>min=</span><span class=s>&#34;2&#34;</span> <span class=na>max=</span><span class=s>&#34;2&#34;</span> <span class=na>width=</span><span class=s>&#34;20&#34;</span> <span class=nt>/&gt;</span>
+    <span class=nt>&lt;col</span> <span class=na>min=</span><span class=s>&#34;3&#34;</span> <span class=na>max=</span><span class=s>&#34;3&#34;</span> <span class=na>width=</span><span class=s>&#34;20&#34;</span> <span class=nt>/&gt;</span>
+  <span class=nt>&lt;/cols&gt;</span>
+  <span class=nt>&lt;sheetData&gt;</span>
+    <span class=nt>&lt;row</span> <span class=na>r=</span><span class=s>&#34;1&#34;</span> <span class=na>spans=</span><span class=s>&#34;1:3&#34;</span> <span class=na>x14ac:dyDescent=</span><span class=s>&#34;0.25&#34;</span><span class=nt>&gt;</span>
+      <span class=nt>&lt;c</span> <span class=na>r=</span><span class=s>&#34;A1&#34;</span> <span class=na>t=</span><span class=s>&#34;inlineStr&#34;</span><span class=nt>&gt;</span>
+        <span class=nt>&lt;is&gt;</span>
+          <span class=nt>&lt;t&gt;</span>f1<span class=nt>&lt;/t&gt;</span>
+        <span class=nt>&lt;/is&gt;</span>
+      <span class=nt>&lt;/c&gt;</span>
+      <span class=nt>&lt;c</span> <span class=na>r=</span><span class=s>&#34;B1&#34;</span> <span class=na>t=</span><span class=s>&#34;inlineStr&#34;</span><span class=nt>&gt;</span>
+        <span class=nt>&lt;is&gt;</span>
+          <span class=nt>&lt;t&gt;</span>f2<span class=nt>&lt;/t&gt;</span>
+        <span class=nt>&lt;/is&gt;</span>
+      <span class=nt>&lt;/c&gt;</span>
+      <span class=nt>&lt;c</span> <span class=na>r=</span><span class=s>&#34;C1&#34;</span> <span class=na>t=</span><span class=s>&#34;inlineStr&#34;</span><span class=nt>&gt;</span>
+        <span class=nt>&lt;is&gt;</span>
+          <span class=nt>&lt;t&gt;</span>f3<span class=nt>&lt;/t&gt;</span>
+        <span class=nt>&lt;/is&gt;</span>
+      <span class=nt>&lt;/c&gt;</span>
+    <span class=nt>&lt;/row&gt;</span>
+    <span class=nt>&lt;row</span> <span class=na>r=</span><span class=s>&#34;2&#34;</span> <span class=na>spans=</span><span class=s>&#34;1:3&#34;</span> <span class=na>x14ac:dyDescent=</span><span class=s>&#34;0.25&#34;</span><span class=nt>&gt;</span>
+      <span class=nt>&lt;c</span> <span class=na>r=</span><span class=s>&#34;A2&#34;</span> <span class=na>t=</span><span class=s>&#34;inlineStr&#34;</span><span class=nt>&gt;</span>
+        <span class=nt>&lt;is&gt;</span>
+          <span class=nt>&lt;t&gt;</span>2 1<span class=nt>&lt;/t&gt;</span>
+        <span class=nt>&lt;/is&gt;</span>
+      <span class=nt>&lt;/c&gt;</span>
+      <span class=nt>&lt;c</span> <span class=na>r=</span><span class=s>&#34;B2&#34;</span> <span class=na>t=</span><span class=s>&#34;inlineStr&#34;</span><span class=nt>&gt;</span>
+        <span class=nt>&lt;is&gt;</span>
+          <span class=nt>&lt;t&gt;</span>2 2<span class=nt>&lt;/t&gt;</span>
+        <span class=nt>&lt;/is&gt;</span>
+      <span class=nt>&lt;/c&gt;</span>
+      <span class=nt>&lt;c</span> <span class=na>r=</span><span class=s>&#34;C2&#34;</span> <span class=na>t=</span><span class=s>&#34;inlineStr&#34;</span><span class=nt>&gt;</span>
+        <span class=nt>&lt;is&gt;</span>
+          <span class=nt>&lt;t&gt;</span>2 3<span class=nt>&lt;/t&gt;</span>
+        <span class=nt>&lt;/is&gt;</span>
+      <span class=nt>&lt;/c&gt;</span>
+    <span class=nt>&lt;/row&gt;</span>
+    <span class=nt>&lt;row</span> <span class=na>r=</span><span class=s>&#34;3&#34;</span> <span class=na>spans=</span><span class=s>&#34;1:3&#34;</span> <span class=na>x14ac:dyDescent=</span><span class=s>&#34;0.25&#34;</span><span class=nt>&gt;</span>
+      <span class=nt>&lt;c</span> <span class=na>r=</span><span class=s>&#34;A3&#34;</span> <span class=na>t=</span><span class=s>&#34;inlineStr&#34;</span><span class=nt>&gt;</span>
+        <span class=nt>&lt;is&gt;</span>
+          <span class=nt>&lt;t&gt;</span>3 1<span class=nt>&lt;/t&gt;</span>
+        <span class=nt>&lt;/is&gt;</span>
+      <span class=nt>&lt;/c&gt;</span>
+      <span class=nt>&lt;c</span> <span class=na>r=</span><span class=s>&#34;B3&#34;</span> <span class=na>t=</span><span class=s>&#34;inlineStr&#34;</span><span class=nt>&gt;</span>
+        <span class=nt>&lt;is&gt;</span>
+          <span class=nt>&lt;t&gt;</span>3 2<span class=nt>&lt;/t&gt;</span>
+        <span class=nt>&lt;/is&gt;</span>
+      <span class=nt>&lt;/c&gt;</span>
+      <span class=nt>&lt;c</span> <span class=na>r=</span><span class=s>&#34;C3&#34;</span> <span class=na>t=</span><span class=s>&#34;inlineStr&#34;</span><span class=nt>&gt;</span>
+        <span class=nt>&lt;is&gt;</span>
+          <span class=nt>&lt;t&gt;</span>3 3<span class=nt>&lt;/t&gt;</span>
+        <span class=nt>&lt;/is&gt;</span>
+      <span class=nt>&lt;/c&gt;</span>
+    <span class=nt>&lt;/row&gt;</span>
+  <span class=nt>&lt;/sheetData&gt;</span>
+<span class=nt>&lt;/worksheet&gt;</span>
+</code></pre></td></tr></table></div></div><p>其中，<cols>用于说明工作簿有多少列，以及每列的名称；<sheetdata>由多个<row>组成，每个<row>代表工作簿的一行，每行由多个cell组成，用<c>表示，为了简单起见，我们使用inlineStr类型来保存数据，数据放在<is>标签中。</p><h2 id=根据数据生成流式xlsx文件>根据数据生成流式xlsx文件</h2><p>要生成流式xlsx文件，首先需要有能够支持流式生成zip文件的库，go和java的标准库都能支持，python的标准库不支持，需要使用第三方库<a href=https://github.com/arjan-s/python-zipstream target=_blank rel="noopener noreffer">python-zipstream</a>或者<a href=https://github.com/kbbdy/zipstream target=_blank rel="noopener noreffer">ZipStream</a>，C/C++需要自己实现，可以参考<a href=https://github.com/evanmiller/mod_zip target=_blank rel="noopener noreffer">nginx zip module</a>。</p><p>我实现了一个<a href=https://gist.github.com/boolking/0c920aab2dc6713150dab35cd02e3367 target=_blank rel="noopener noreffer">流式生成xlsx的go版本</a>，供参考。</p><h2 id=流式http文件下载>流式HTTP文件下载</h2><p>当需要传输文件流时，HTTP的header不发送Content-Length，在发送完headers后，将生成的流式xlsx数据写入socket即可。go的http handler的参数ResponseWriter是实现了io.Writer接口，可以直接写入生成的xlsx文件数据，比较简单，就不写例子了。</p><div class=highlight><div class=chroma><table class=lntable><tr><td class=lntd><pre class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span><span class=lnt>65
+</span></code></pre></td><td class=lntd><pre class=chroma><code class=language-go data-lang=go><span class=kd>type</span> <span class=nx>Handler</span> <span class=kd>interface</span> <span class=p>{</span>
+    <span class=nf>ServeHTTP</span><span class=p>(</span><span class=nx>ResponseWriter</span><span class=p>,</span> <span class=o>*</span><span class=nx>Request</span><span class=p>)</span>
+<span class=p>}</span>
+
+<span class=kd>type</span> <span class=nx>ResponseWriter</span> <span class=kd>interface</span> <span class=p>{</span>
+    <span class=c1>// Header returns the header map that will be sent by
+</span><span class=c1></span>    <span class=c1>// WriteHeader. The Header map also is the mechanism with which
+</span><span class=c1></span>    <span class=c1>// Handlers can set HTTP trailers.
+</span><span class=c1></span>    <span class=c1>//
+</span><span class=c1></span>    <span class=c1>// Changing the header map after a call to WriteHeader (or
+</span><span class=c1></span>    <span class=c1>// Write) has no effect unless the modified headers are
+</span><span class=c1></span>    <span class=c1>// trailers.
+</span><span class=c1></span>    <span class=c1>//
+</span><span class=c1></span>    <span class=c1>// There are two ways to set Trailers. The preferred way is to
+</span><span class=c1></span>    <span class=c1>// predeclare in the headers which trailers you will later
+</span><span class=c1></span>    <span class=c1>// send by setting the &#34;Trailer&#34; header to the names of the
+</span><span class=c1></span>    <span class=c1>// trailer keys which will come later. In this case, those
+</span><span class=c1></span>    <span class=c1>// keys of the Header map are treated as if they were
+</span><span class=c1></span>    <span class=c1>// trailers. See the example. The second way, for trailer
+</span><span class=c1></span>    <span class=c1>// keys not known to the Handler until after the first Write,
+</span><span class=c1></span>    <span class=c1>// is to prefix the Header map keys with the TrailerPrefix
+</span><span class=c1></span>    <span class=c1>// constant value. See TrailerPrefix.
+</span><span class=c1></span>    <span class=c1>//
+</span><span class=c1></span>    <span class=c1>// To suppress automatic response headers (such as &#34;Date&#34;), set
+</span><span class=c1></span>    <span class=c1>// their value to nil.
+</span><span class=c1></span>    <span class=nf>Header</span><span class=p>()</span> <span class=nx>Header</span>
+
+    <span class=c1>// Write writes the data to the connection as part of an HTTP reply.
+</span><span class=c1></span>    <span class=c1>//
+</span><span class=c1></span>    <span class=c1>// If WriteHeader has not yet been called, Write calls
+</span><span class=c1></span>    <span class=c1>// WriteHeader(http.StatusOK) before writing the data. If the Header
+</span><span class=c1></span>    <span class=c1>// does not contain a Content-Type line, Write adds a Content-Type set
+</span><span class=c1></span>    <span class=c1>// to the result of passing the initial 512 bytes of written data to
+</span><span class=c1></span>    <span class=c1>// DetectContentType. Additionally, if the total size of all written
+</span><span class=c1></span>    <span class=c1>// data is under a few KB and there are no Flush calls, the
+</span><span class=c1></span>    <span class=c1>// Content-Length header is added automatically.
+</span><span class=c1></span>    <span class=c1>//
+</span><span class=c1></span>    <span class=c1>// Depending on the HTTP protocol version and the client, calling
+</span><span class=c1></span>    <span class=c1>// Write or WriteHeader may prevent future reads on the
+</span><span class=c1></span>    <span class=c1>// Request.Body. For HTTP/1.x requests, handlers should read any
+</span><span class=c1></span>    <span class=c1>// needed request body data before writing the response. Once the
+</span><span class=c1></span>    <span class=c1>// headers have been flushed (due to either an explicit Flusher.Flush
+</span><span class=c1></span>    <span class=c1>// call or writing enough data to trigger a flush), the request body
+</span><span class=c1></span>    <span class=c1>// may be unavailable. For HTTP/2 requests, the Go HTTP server permits
+</span><span class=c1></span>    <span class=c1>// handlers to continue to read the request body while concurrently
+</span><span class=c1></span>    <span class=c1>// writing the response. However, such behavior may not be supported
+</span><span class=c1></span>    <span class=c1>// by all HTTP/2 clients. Handlers should read before writing if
+</span><span class=c1></span>    <span class=c1>// possible to maximize compatibility.
+</span><span class=c1></span>    <span class=nf>Write</span><span class=p>([]</span><span class=kt>byte</span><span class=p>)</span> <span class=p>(</span><span class=kt>int</span><span class=p>,</span> <span class=kt>error</span><span class=p>)</span>
+
+    <span class=c1>// WriteHeader sends an HTTP response header with the provided
+</span><span class=c1></span>    <span class=c1>// status code.
+</span><span class=c1></span>    <span class=c1>//
+</span><span class=c1></span>    <span class=c1>// If WriteHeader is not called explicitly, the first call to Write
+</span><span class=c1></span>    <span class=c1>// will trigger an implicit WriteHeader(http.StatusOK).
+</span><span class=c1></span>    <span class=c1>// Thus explicit calls to WriteHeader are mainly used to
+</span><span class=c1></span>    <span class=c1>// send error codes.
+</span><span class=c1></span>    <span class=c1>//
+</span><span class=c1></span>    <span class=c1>// The provided code must be a valid HTTP 1xx-5xx status code.
+</span><span class=c1></span>    <span class=c1>// Only one header may be written. Go does not currently
+</span><span class=c1></span>    <span class=c1>// support sending user-defined 1xx informational headers,
+</span><span class=c1></span>    <span class=c1>// with the exception of 100-continue response header that the
+</span><span class=c1></span>    <span class=c1>// Server sends automatically when the Request.Body is read.
+</span><span class=c1></span>    <span class=nf>WriteHeader</span><span class=p>(</span><span class=nx>statusCode</span> <span class=kt>int</span><span class=p>)</span>
+<span class=p>}</span>
+</code></pre></td></tr></table></div></div></div><div class=post-footer id=post-footer><div class=post-info><div class=post-info-line><div class=post-info-mod><span>更新于 2021-01-03</span></div><div class=post-info-license></div></div><div class=post-info-line><div class=post-info-md></div><div class=post-info-share><span></span></div></div></div><div class=post-info-more><section class=post-tags><i class="fas fa-tags fa-fw"></i>&nbsp;<a href=/tags/xlsx/>xlsx</a>,&nbsp;<a href=/tags/zip/>zip</a>,&nbsp;<a href=/tags/golang/>golang</a>,&nbsp;<a href=/tags/java/>java</a>,&nbsp;<a href=/tags/python/>python</a></section><section><span><a href=javascript:void(0); onclick=window.history.back();>返回</a></span>&nbsp;|&nbsp;<span><a href=/>主页</a></span></section></div><div class=post-nav><a href=/recover-dropped-database/ class=prev rel=prev title=记一次MySQL删库的恢复><i class="fas fa-angle-left fa-fw"></i>记一次MySQL删库的恢复</a>
+<a href=/playing-with-hardware/ class=next rel=next title=软件开发者的硬件开发之旅>软件开发者的硬件开发之旅<i class="fas fa-angle-right fa-fw"></i></a></div></div><div id=comments><div id=disqus_thread class=comment></div><noscript>Please enable JavaScript to view the comments powered by <a href=https://disqus.com/?ref_noscript>Disqus</a>.</noscript></div></article></div></main><footer class=footer><div class=footer-container><div class=footer-line><i class="far fa-copyright fa-fw"></i><span itemprop=copyrightYear>2020 - 2021</span><span class=author itemprop=copyrightHolder>&nbsp;<a href=https://boolking.github.io/ target=_blank>boolking</a></span>&nbsp;|&nbsp;<span class=license><a rel="license external nofollow noopener noreffer" href=https://creativecommons.org/licenses/by-nc/4.0/ target=_blank>CC BY-NC 4.0</a></span></div></div></footer></div><div id=fixed-buttons><a href=# id=back-to-top class=fixed-button title=回到顶部><i class="fas fa-arrow-up fa-fw"></i></a><a href=# id=view-comments class=fixed-button title=查看评论><i class="fas fa-comment fa-fw"></i></a></div><script type=text/javascript src=https://boolking-1.disqus.com/embed.js defer></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js></script><script type=text/javascript>window.config={"code":{"copyTitle":"复制到剪贴板","maxShownLines":100},"comment":{}};</script><script type=text/javascript src=/js/theme.min.js></script></body></html>
